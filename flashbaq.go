@@ -134,7 +134,10 @@ func symbolScrape(doc *goquery.Document, res *[]symbolRet) {
 			change = "-" + change
 			percentchange = "-" + percentchange
 		}
-		website := s.Find(".iqsumlinku").Attr("href")
+		website, err := s.Find(".iqsumlinku").Attr("href")
+		if err != nil {
+			website = ""
+		}
 		tableInfo := s.Find(".infoquote_qn .genTable tr td")
 		shareVolume := tableInfo.Eq(3).Text()
 		todaysHigh := cleanMoney(tableInfo.Eq(5).Text())
