@@ -47,6 +47,7 @@ type symbolRet struct {
 	OpenPrice     string     `json:"openPrice"`
 	ClosePrice    string     `json:"closePrice"`
 	ChartData     []chartRet `json:"chartData"`
+	Website       string     `json:"website"`
 }
 
 type symbolJSON struct {
@@ -133,6 +134,7 @@ func symbolScrape(doc *goquery.Document, res *[]symbolRet) {
 			change = "-" + change
 			percentchange = "-" + percentchange
 		}
+		website := s.Find(".iqsumlinku").Text()
 		tableInfo := s.Find(".infoquote_qn .genTable tr td")
 		shareVolume := tableInfo.Eq(3).Text()
 		todaysHigh := cleanMoney(tableInfo.Eq(5).Text())
@@ -154,6 +156,7 @@ func symbolScrape(doc *goquery.Document, res *[]symbolRet) {
 		*res = append(*res, symbolRet{
 			Ticker:        ticker,
 			Name:          name,
+			Website:       website,
 			Type:          stocktype,
 			Market:        market,
 			MarketStatus:  marketstatus,
