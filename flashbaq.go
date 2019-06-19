@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -23,7 +24,7 @@ var chartBase = "https://charting.nasdaq.com/ext/charts.dll?2-1-14-0-0-512-03NA0
 var chartSuff = "-&SF:1|5-BG=FFFFFF-BT=0-HT=395--XTBL-"
 var newsBase = "https://www.nasdaq.com/symbol/"
 var newsSuff = "/news-headlines"
-var cacheTime = 300
+var cacheTime int
 
 type newsRet struct {
 	Heading string `json:"heading"`
@@ -80,6 +81,12 @@ func main() {
 	if len(origins) < 1 {
 		origins = "*"
 	}
+	cache := os.Getenv("FLASHBAQ_CACHE_TIME")
+	if len(cache) < 1 {
+		cache = "300"
+	}
+	cacheTime, err := strconv.Atoi(cache)
+	chk(err)
 
 	r := chi.NewRouter()
 	cors := cors.New(cors.Options{
