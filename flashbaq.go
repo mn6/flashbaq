@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 	"unicode"
@@ -16,11 +17,19 @@ import (
 	_ "github.com/joho/godotenv/autoload"
 )
 
+var cleanRegex = regexp.MustCompile(`\s\s+`)
 var symbolBase = "https://www.nasdaq.com/aspx/infoquotes.aspx"
-var symbolErrMsg = "Quotes are not supported for this symbol."
 var chartBase = "https://charting.nasdaq.com/ext/charts.dll?2-1-14-0-0-512-03NA000000"
 var chartSuff = "-&SF:1|5-BG=FFFFFF-BT=0-HT=395--XTBL-"
+var newsBase = "https://www.nasdaq.com/symbol/"
+var newsSuff = "/news-headlines"
 var cacheTime = 300
+
+type newsRet struct {
+	Heading string `json:"heading"`
+	URL     string `json:"url"`
+	Details string `json:"details"`
+}
 
 type chartRet struct {
 	Date   string `json:"date"`
@@ -31,6 +40,7 @@ type chartRet struct {
 type symbolRet struct {
 	Ticker        string     `json:"ticker"`
 	Name          string     `json:"name"`
+	Website       string     `json:"website"`
 	Type          string     `json:"type"`
 	Market        string     `json:"market"`
 	MarketStatus  string     `json:"marketStatus"`
@@ -47,7 +57,7 @@ type symbolRet struct {
 	OpenPrice     string     `json:"openPrice"`
 	ClosePrice    string     `json:"closePrice"`
 	ChartData     []chartRet `json:"chartData"`
-	Website       string     `json:"website"`
+	News          []newsRet  `json:"news"`
 }
 
 type symbolJSON struct {
@@ -122,6 +132,11 @@ func symbolScrape(doc *goquery.Document, res *[]symbolRet) {
 	doc.Find("table#quotes_content_left_InfoQuotesResults > tbody > tr").Each(func(i int, s *goquery.Selection) {
 		info := strings.Split(s.Find(".infoquote_qn > div").Eq(1).Text(), "|")
 		ticker := cleanScrape(info[0])
+		chFin := make(chan bool)
+		var chartData []chartRet
+		var newsData []newsRet
+		go chartScrape(ticker, &chartData, chFin)
+		go newsScrape(ticker, &newsData, chFin)
 		name := info[1]
 		stocktype := info[2]
 		market := strings.Replace(info[3], "Market : ", "", -1)
@@ -148,7 +163,6 @@ func symbolScrape(doc *goquery.Document, res *[]symbolRet) {
 		openPrice := cleanMoney(tableInfo.Eq(13).Text())
 		closePrice := cleanMoney(tableInfo.Eq(15).Text())
 		fiftyTwoLow := cleanMoney(tableInfo.Eq(25).Text())
-		chartData := chartScrape(ticker)
 
 		cleanSymbolScrape(
 			&name, &stocktype, &market, &marketstatus,
@@ -156,6 +170,12 @@ func symbolScrape(doc *goquery.Document, res *[]symbolRet) {
 			&todaysHigh, &bestBid, &fiftyTwoHigh, &fiftyTwoLow,
 			&eps, &openPrice, &closePrice, &todaysLow,
 		)
+		for i := 0; i < 2; {
+			select {
+			case <-chFin:
+				i++
+			}
+		}
 		*res = append(*res, symbolRet{
 			Ticker:        ticker,
 			Name:          name,
@@ -176,11 +196,15 @@ func symbolScrape(doc *goquery.Document, res *[]symbolRet) {
 			OpenPrice:     openPrice,
 			ClosePrice:    closePrice,
 			ChartData:     chartData,
+			News:          newsData,
 		})
 	})
 }
 
-func chartScrape(ticker string) []chartRet {
+func chartScrape(ticker string, retNews *[]chartRet, chFin chan bool) {
+	defer func() {
+		chFin <- true
+	}()
 	var chart []chartRet
 	req, err := http.NewRequest("GET", chartBase+ticker+chartSuff, nil)
 	chk(err)
@@ -199,11 +223,40 @@ func chartScrape(ticker string) []chartRet {
 		opp := len(chart) - 1 - i
 		chart[i], chart[opp] = chart[opp], chart[i]
 	}
-	return chart
+
+	*retNews = chart
+}
+
+func newsScrape(ticker string, retNews *[]newsRet, chFin chan bool) {
+	defer func() {
+		chFin <- true
+	}()
+	var news []newsRet
+	req, err := http.NewRequest("GET", newsBase+ticker+newsSuff, nil)
+	chk(err)
+	resp, err := client.Do(req)
+	body, err := goquery.NewDocumentFromReader(resp.Body)
+
+	body.Find(".news-headlines > iframe").PrevAll().Filter("div").Not("[class], [id]").Each(func(i int, s *goquery.Selection) {
+		heading := s.Find("span > a")
+		headingText := cleanScrape(heading.Text())
+		headingURL, exists := heading.Attr("href")
+		if !exists {
+			headingURL = ""
+		}
+		details := cleanScrape(s.Find("small").Text())
+		news = append(news, newsRet{
+			Heading: headingText,
+			URL:     headingURL,
+			Details: details,
+		})
+	})
+
+	*retNews = news
 }
 
 func cleanScrape(field string) string {
-	return strings.Trim(strings.Replace(field, "\n", "", -1), " ")
+	return strings.Trim(cleanRegex.ReplaceAllString(field, ""), " ")
 }
 
 func cleanSymbolScrape(fields ...*string) {
