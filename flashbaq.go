@@ -85,7 +85,8 @@ func main() {
 	if len(cache) < 1 {
 		cache = "300"
 	}
-	cacheTime, err := strconv.Atoi(cache)
+	var err error
+	cacheTime, err = strconv.Atoi(cache)
 	chk(err)
 
 	r := chi.NewRouter()
