@@ -20,8 +20,8 @@ import (
 
 var cleanRegex = regexp.MustCompile(`\s\s+`)
 var symbolBase = "https://www.nasdaq.com/aspx/infoquotes.aspx"
-var chartBase = "https://charting.nasdaq.com/ext/charts.dll?2-1-14-0-0-512-03NA000000"
-var chartSuff = "-&SF:1|5-BG=FFFFFF-BT=0-HT=395--XTBL-"
+var chartBase = "https://www.nasdaq.com/symbol/"
+var chartSuff = "/historical"
 var newsBase = "https://www.nasdaq.com/symbol/"
 var newsSuff = "/news-headlines"
 var cacheTime int
@@ -36,29 +36,31 @@ type chartRet struct {
 	Date   string `json:"date"`
 	Last   string `json:"last"`
 	Volume string `json:"volume"`
+	Open   string `json:"open"`
+	High   string `json:"high"`
+	Low    string `json:"low"`
 }
 
 type symbolRet struct {
-	Ticker        string     `json:"ticker"`
-	Name          string     `json:"name"`
-	Website       string     `json:"website"`
-	Type          string     `json:"type"`
-	Market        string     `json:"market"`
-	MarketStatus  string     `json:"marketStatus"`
-	Price         string     `json:"price"`
-	Change        string     `json:"change"`
-	PercentChange string     `json:"percentChange"`
-	ShareVolume   string     `json:"shareVolume"`
-	TodaysHigh    string     `json:"todaysHigh"`
-	TodaysLow     string     `json:"todaysLow"`
-	BestBid       string     `json:"bestBid"`
-	FiftyTwoHigh  string     `json:"fiftyTwoWeekHigh"`
-	FiftyTwoLow   string     `json:"fiftyTwoWeekLow"`
-	EPS           string     `json:"earningsPerShare"`
-	OpenPrice     string     `json:"openPrice"`
-	ClosePrice    string     `json:"closePrice"`
-	ChartData     []chartRet `json:"chartData"`
-	News          []newsRet  `json:"news"`
+	Ticker        string    `json:"ticker"`
+	Name          string    `json:"name"`
+	Website       string    `json:"website"`
+	Type          string    `json:"type"`
+	Market        string    `json:"market"`
+	MarketStatus  string    `json:"marketStatus"`
+	Price         string    `json:"price"`
+	Change        string    `json:"change"`
+	PercentChange string    `json:"percentChange"`
+	ShareVolume   string    `json:"shareVolume"`
+	TodaysHigh    string    `json:"todaysHigh"`
+	TodaysLow     string    `json:"todaysLow"`
+	BestBid       string    `json:"bestBid"`
+	FiftyTwoHigh  string    `json:"fiftyTwoWeekHigh"`
+	FiftyTwoLow   string    `json:"fiftyTwoWeekLow"`
+	EPS           string    `json:"earningsPerShare"`
+	OpenPrice     string    `json:"openPrice"`
+	ClosePrice    string    `json:"closePrice"`
+	News          []newsRet `json:"news"`
 }
 
 type symbolJSON struct {
@@ -99,6 +101,7 @@ func main() {
 	r.Use(cors.Handler)
 
 	r.Get("/symbol", symbol)
+	r.Get("/chart", chart)
 
 	log.Printf("Listening on port %s...", port)
 	http.ListenAndServe(port, r)
@@ -141,9 +144,7 @@ func symbolScrape(doc *goquery.Document, res *[]symbolRet) {
 		info := strings.Split(s.Find(".infoquote_qn > div").Eq(1).Text(), "|")
 		ticker := cleanScrape(info[0])
 		chFin := make(chan bool)
-		var chartData []chartRet
 		var newsData []newsRet
-		go chartScrape(ticker, &chartData, chFin)
 		go newsScrape(ticker, &newsData, chFin)
 		name := info[1]
 		stocktype := info[2]
@@ -178,12 +179,8 @@ func symbolScrape(doc *goquery.Document, res *[]symbolRet) {
 			&todaysHigh, &bestBid, &fiftyTwoHigh, &fiftyTwoLow,
 			&eps, &openPrice, &closePrice, &todaysLow,
 		)
-		for i := 0; i < 2; {
-			select {
-			case <-chFin:
-				i++
-			}
-		}
+		<-chFin
+
 		*res = append(*res, symbolRet{
 			Ticker:        ticker,
 			Name:          name,
@@ -203,28 +200,42 @@ func symbolScrape(doc *goquery.Document, res *[]symbolRet) {
 			EPS:           eps,
 			OpenPrice:     openPrice,
 			ClosePrice:    closePrice,
-			ChartData:     chartData,
 			News:          newsData,
 		})
 	})
 }
 
-func chartScrape(ticker string, retNews *[]chartRet, chFin chan bool) {
-	defer func() {
-		chFin <- true
-	}()
-	var chart []chartRet
-	req, err := http.NewRequest("GET", chartBase+ticker+chartSuff, nil)
-	chk(err)
-	resp, err := client.Do(req)
-	body, err := goquery.NewDocumentFromReader(resp.Body)
+func chart(w http.ResponseWriter, r *http.Request) {
+	ticker := r.URL.Query().Get("ticker")
+	if len(ticker) < 1 {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte("{ error: \"NO TICKERS PROVIDED\" }"))
+	} else {
+		req, err := http.NewRequest("POST", chartBase+ticker+chartSuff, strings.NewReader("1y|false|"+ticker))
+		chk(err)
+		resp, err := client.Do(req)
+		var retChart = []chartRet{}
+		body, err := goquery.NewDocumentFromReader(resp.Body)
+		chk(err)
+		chartScrape(body, &retChart)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(retChart)
+		log.Println("Served chart " + ticker)
+	}
+}
 
-	body.Find(".DrillDown > tbody").Find("tr").Not(":nth-child(1)").Each(func(i int, s *goquery.Selection) {
+func chartScrape(body *goquery.Document, retChart *[]chartRet) {
+	var chart []chartRet
+
+	body.Find("#quotes_content_left_pnlAJAX tbody").Find("tr").Not(":nth-child(1)").Each(func(i int, s *goquery.Selection) {
 		data := s.Find("td")
 		chart = append(chart, chartRet{
-			Date:   data.Eq(0).Text(),
-			Last:   data.Eq(1).Text(),
-			Volume: data.Eq(2).Text(),
+			Date:   cleanChart(data.Eq(0).Text()),
+			Open:   cleanChart(data.Eq(1).Text()),
+			High:   cleanChart(data.Eq(2).Text()),
+			Low:    cleanChart(data.Eq(3).Text()),
+			Last:   cleanChart(data.Eq(4).Text()),
+			Volume: cleanChart(data.Eq(5).Text()),
 		})
 	})
 	for i := len(chart)/2 - 1; i >= 0; i-- {
@@ -232,7 +243,7 @@ func chartScrape(ticker string, retNews *[]chartRet, chFin chan bool) {
 		chart[i], chart[opp] = chart[opp], chart[i]
 	}
 
-	*retNews = chart
+	*retChart = chart
 }
 
 func newsScrape(ticker string, retNews *[]newsRet, chFin chan bool) {
@@ -261,6 +272,10 @@ func newsScrape(ticker string, retNews *[]newsRet, chFin chan bool) {
 	})
 
 	*retNews = news
+}
+
+func cleanChart(field string) string {
+	return strings.Trim(strings.Replace(field, "\n", "", -1), " ")
 }
 
 func cleanScrape(field string) string {

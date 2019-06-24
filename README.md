@@ -6,10 +6,14 @@ Nasdaq scraper + API built in Go.
 http://localhost:7810
   /symbol                  Returns stock symbol information.
     ?tickers=goog,nvda     Comma-delimitered ticker list.
+http://localhost:7810
+  /chart                  Returns stock symbol information.
+    ?ticker=amzn          One ticker per request.
 ```
 
 ### Example data returned
 
+```/symbol?tickers=TSLA```
 ```json
 [
   {
@@ -31,19 +35,6 @@ http://localhost:7810
     "earningsPerShare": "-5.79",
     "openPrice": "228.72",
     "closePrice": "224.74",
-    "chartData": [
-      {
-        "date": "06/18/2018",
-        "last": "370.83",
-        "volume": "12,025,450"
-      },
-      {
-        "date": "06/19/2018",
-        "last": "352.55",
-        "volume": "12,734,840"
-      },
-      ...
-    ],
     "news": [
       {
         "heading": "5 Top Stock Trades for Tuesday: FB, NFLX, GILD, TSLA",
@@ -58,6 +49,61 @@ http://localhost:7810
       ...
     ]
   }
+]
+```
+
+```/chart?ticker=TSLA```
+```json
+[
+  {
+    "date": "03/21/2019",
+    "last": "1819.26",
+    "volume": "5,740,075",
+    "open": "1796.26",
+    "high": "1823.75",
+    "low": "1787.281"
+  },
+  {
+    "date": "03/22/2019",
+    "last": "1764.77",
+    "volume": "6,347,858",
+    "open": "1810.17",
+    "high": "1818.98",
+    "low": "1763.11"
+  },
+  {
+    "date": "03/25/2019",
+    "last": "1774.26",
+    "volume": "5,098,182",
+    "open": "1757.79",
+    "high": "1782.6751",
+    "low": "1747.5"
+  },
+  {
+    "date": "03/26/2019",
+    "last": "1783.76",
+    "volume": "4,848,654",
+    "open": "1793",
+    "high": "1805.77",
+    "low": "1773.3598"
+  },
+  {
+    "date": "03/27/2019",
+    "last": "1765.7",
+    "volume": "4,316,646",
+    "open": "1784.13",
+    "high": "1787.5",
+    "low": "1745.68"
+  },
+  {
+    "date": "03/28/2019",
+    "last": "1773.42",
+    "volume": "3,030,860",
+    "open": "1770",
+    "high": "1777.93",
+    "low": "1753.47"
+  },
+  ...
 ]
 ```
 
