@@ -15,6 +15,7 @@ import (
 	"github.com/go-chi/chi"
 	"github.com/go-chi/cors"
 	"github.com/go-redis/redis"
+	"github.com/guptarohit/asciigraph"
 	_ "github.com/joho/godotenv/autoload"
 )
 
@@ -30,6 +31,11 @@ type newsRet struct {
 	Heading string `json:"heading"`
 	URL     string `json:"url"`
 	Details string `json:"details"`
+}
+
+type chartReq struct {
+	Data  []chartRet `json:"data"`
+	Graph string     `json:"ascii"`
 }
 
 type chartRet struct {
@@ -214,7 +220,7 @@ func chart(w http.ResponseWriter, r *http.Request) {
 		req, err := http.NewRequest("POST", chartBase+ticker+chartSuff, strings.NewReader("1y|false|"+ticker))
 		chk(err)
 		resp, err := client.Do(req)
-		var retChart = []chartRet{}
+		var retChart = chartReq{}
 		body, err := goquery.NewDocumentFromReader(resp.Body)
 		chk(err)
 		chartScrape(body, &retChart)
@@ -224,7 +230,7 @@ func chart(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func chartScrape(body *goquery.Document, retChart *[]chartRet) {
+func chartScrape(body *goquery.Document, retChart *chartReq) {
 	var chart []chartRet
 
 	body.Find("#quotes_content_left_pnlAJAX tbody").Find("tr").Not(":nth-child(1)").Each(func(i int, s *goquery.Selection) {
@@ -243,7 +249,19 @@ func chartScrape(body *goquery.Document, retChart *[]chartRet) {
 		chart[i], chart[opp] = chart[opp], chart[i]
 	}
 
-	*retChart = chart
+	var data []float64
+	if len(chart) >= 30 {
+		lastThirty := chart[len(chart)-30 : len(chart)]
+		for _, member := range lastThirty {
+			floated, err := strconv.ParseFloat(member.Last, 64)
+			chk(err)
+			data = append(data, floated)
+		}
+	}
+	*retChart = chartReq{
+		Data:  chart,
+		Graph: asciigraph.Plot(data),
+	}
 }
 
 func newsScrape(ticker string, retNews *[]newsRet, chFin chan bool) {
