@@ -120,7 +120,7 @@ func symbol(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("{ error: \"NO TICKERS PROVIDED\" }"))
 	} else {
 		tickers = "&" + strings.Join(strings.Split(tickers, ","), "&")
-		get := getDB(tickers, "flashbaq:")
+		get := getDB(strings.ToLower(tickers), "flashbaq:")
 		if len(get) > 1 {
 			w.Header().Set("Content-Type", "application/json")
 			w.Write([]byte(get))
@@ -141,7 +141,7 @@ func symbol(w http.ResponseWriter, r *http.Request) {
 		out, err := json.Marshal(results)
 		chk(err)
 
-		setDB(tickers, string(out), "flashbaq:")
+		setDB(strings.ToLower(tickers), string(out), "flashbaq:")
 	}
 }
 
@@ -217,7 +217,7 @@ func chart(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte("{ error: \"NO TICKERS PROVIDED\" }"))
 	} else {
-		get := getDB(ticker, "flashbaq:chart:")
+		get := getDB(strings.ToLower(ticker), "flashbaq:chart:")
 		if len(get) > 1 {
 			w.Header().Set("Content-Type", "application/json")
 			w.Write([]byte(get))
@@ -237,7 +237,7 @@ func chart(w http.ResponseWriter, r *http.Request) {
 		out, err := json.Marshal(retChart)
 		chk(err)
 
-		setDB(ticker, string(out), "flashbaq:chart:")
+		setDB(strings.ToLower(ticker), string(out), "flashbaq:chart:")
 	}
 }
 
