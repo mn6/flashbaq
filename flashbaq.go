@@ -171,7 +171,7 @@ func symbolScrape(doc *goquery.Document, res *[]symbolRet) {
 		tableInfo := s.Find(".infoquote_qn .genTable tr td")
 		shareVolume := tableInfo.Eq(3).Text()
 		todaysHigh := cleanMoney(tableInfo.Eq(5).Text())
-		todaysLow := cleanMoney(tableInfo.Eq(5).Text())
+		todaysLow := cleanMoney(tableInfo.Eq(21).Text())
 		bestBid := cleanMoney(tableInfo.Eq(7).Text())
 		fiftyTwoHigh := cleanMoney(tableInfo.Eq(9).Text())
 		eps := cleanMoney(tableInfo.Eq(11).Text())
