@@ -120,7 +120,7 @@ func symbol(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("{ error: \"NO TICKERS PROVIDED\" }"))
 	} else {
 		tickers = "&" + strings.Join(strings.Split(tickers, ","), "&")
-		get := getDB(tickers)
+		get := getDB(tickers, "flashbaq:")
 		if len(get) > 1 {
 			w.Header().Set("Content-Type", "application/json")
 			w.Write([]byte(get))
@@ -141,7 +141,7 @@ func symbol(w http.ResponseWriter, r *http.Request) {
 		out, err := json.Marshal(results)
 		chk(err)
 
-		setDB(tickers, string(out))
+		setDB(tickers, string(out), "flashbaq:")
 	}
 }
 
@@ -217,6 +217,13 @@ func chart(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte("{ error: \"NO TICKERS PROVIDED\" }"))
 	} else {
+		get := getDB(ticker, "flashbaq:chart:")
+		if len(get) > 1 {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(get))
+			log.Println("RServed chart " + ticker)
+			return
+		}
 		req, err := http.NewRequest("POST", chartBase+ticker+chartSuff, strings.NewReader("1y|false|"+ticker))
 		chk(err)
 		resp, err := client.Do(req)
@@ -227,6 +234,10 @@ func chart(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(retChart)
 		log.Println("Served chart " + ticker)
+		out, err := json.Marshal(retChart)
+		chk(err)
+
+		setDB(ticker, string(out), "flashbaq:chart:")
 	}
 }
 
@@ -327,8 +338,8 @@ func chk(err error) {
 	}
 }
 
-func getDB(ticker string) string {
-	get, err := rds.Get("flashbaq:" + ticker).Result()
+func getDB(ticker string, key string) string {
+	get, err := rds.Get(key + ticker).Result()
 	if err != nil && err.Error() == "redis: nil" {
 		get = ""
 	} else {
@@ -337,7 +348,7 @@ func getDB(ticker string) string {
 	return get
 }
 
-func setDB(ticker string, data string) {
-	err := rds.Set("flashbaq:"+ticker, data, time.Duration(cacheTime)*time.Second).Err()
+func setDB(ticker string, data string, key string) {
+	err := rds.Set(key+ticker, data, time.Duration(cacheTime)*time.Second).Err()
 	chk(err)
 }
