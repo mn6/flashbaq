@@ -260,7 +260,7 @@ func chartScrape(body *goquery.Document, retChart *chartReq) {
 	}
 	*retChart = chartReq{
 		Data:  chart,
-		Graph: asciigraph.Plot(data),
+		Graph: asciigraph.Plot(data, asciigraph.Height(10)),
 	}
 }
 
