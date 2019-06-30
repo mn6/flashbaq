@@ -261,8 +261,8 @@ func chartScrape(body *goquery.Document, retChart *chartReq) {
 	}
 
 	var data []float64
-	if len(chart) >= 37 {
-		lastThirty := chart[len(chart)-37 : len(chart)]
+	if len(chart) >= 23 {
+		lastThirty := chart[len(chart)-23 : len(chart)]
 		for _, member := range lastThirty {
 			floated, err := strconv.ParseFloat(member.Last, 64)
 			chk(err)
